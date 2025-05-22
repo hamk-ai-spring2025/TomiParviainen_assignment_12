@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-LLM Chat</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        select, textarea, button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box; /* Important for padding and width */
+            font-size: 1rem;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #response-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            min-height: 50px;
+            white-space: pre-wrap; /* Preserve line breaks and spaces */
+            word-wrap: break-word; /* Break long words */
+        }
+        .error-message {
+            color: #c0392b;
+            font-weight: bold;
+        }
+        .warning-message {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Modern LLM Chat</h1>
+
+        <div>
+            <label for="model">Select Model:</label>
+            <select id="model">
+                <option value="OpenAI GPT-4">OpenAI GPT-4</option>
+                <option value="Claude 3 Sonnet">Claude 3 Sonnet</option>
+                <!-- Add more models here if needed -->
+            </select>
+        </div>
+
+        <div>
+            <label for="message">Your Message:</label>
+            <textarea id="message" placeholder="Type your message here..."></textarea>
+        </div>
+
+        <button id="sendButton" onclick="sendMessage()">Send Message</button>
+
+        <div>
+            <label for="response">LLM Response:</label>
+            <div id="response-container">
+                <span id="response">Waiting for your message...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>LLM Chat Interface | Group: [Your Group Name or Your Full Name]</p>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById("message");
+        const responseElement = document.getElementById("response");
+        const sendButton = document.getElementById("sendButton");
+
+        async function sendMessage() {
+            const model = document.getElementById("model").value;
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                responseElement.innerText = "⚠️ Please enter a message.";
+                responseElement.className = "warning-message";
+                return;
+            }
+
+            responseElement.innerText = "🔄 Thinking...";
+            responseElement.className = ""; // Reset class
+            sendButton.disabled = true;
+
+            try {
+                const backendResponse = await fetch("http://127.0.0.1:8000/chat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ model, message })
+                });
+
+                const data = await backendResponse.json();
+
+                if (backendResponse.ok) {
+                    // Even if response.ok is true, the 'reply' might contain a server-side "user error"
+                    // like "Please provide a message" or "Invalid model"
+                    if (data.reply && data.reply.startsWith("⚠️")) {
+                        responseElement.innerText = data.reply;
+                        responseElement.className = "warning-message";
+                    } else {
+                        responseElement.innerText = data.reply || "No reply content received.";
+                        responseElement.className = ""; // Reset class
+                    }
+                } else {
+                    // This block handles network errors or HTTP errors (4xx, 5xx)
+                    // The backend is structured to often return 200 OK with error details in 'reply' or 'detail'
+                    // but this handles cases where FastAPI itself throws an HTTP error before our endpoint logic.
+                    responseElement.innerText = `❌ Network/HTTP Error: ${backendResponse.status} - ${data.detail || backendResponse.statusText || "Something went wrong"}`;
+                    responseElement.className = "error-message";
+                }
+            } catch (error) {
+                console.error("Fetch error:", error);
+                responseElement.innerText = `❌ Client-side Error: ${error.message}. Check browser console and if backend is running.`;
+                responseElement.className = "error-message";
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
+        // Optional: Allow sending message with Enter key in textarea, Shift+Enter for new line
+        messageInput.addEventListener("keypress", function(event) {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault(); // Prevent default Enter behavior (new line)
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
